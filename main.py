@@ -181,8 +181,8 @@ try:
 
             sender_index = (sender_index + 1) % len(active_accounts)
 
-            # Random Anti-Spam Delay (30s to 90s)
-            delay = random.randint(30, 90)
+            # Random Anti-Spam Delay (5s to 10s)
+            delay = random.randint(5, 10)
             print(f"⏳ Sleeping for {delay} seconds to act like a human...")
             time.sleep(delay)
 
@@ -195,3 +195,4 @@ try:
 except Exception as e:
     print("\n❌ SYSTEM CRASH ERROR:")
     print(e)
+
