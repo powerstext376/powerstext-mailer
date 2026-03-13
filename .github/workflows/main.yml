@@ -1,0 +1,28 @@
+name: Powerstext Daily Auto-Engine
+
+on:
+  schedule:
+    # 4:30 AM UTC = theek 10:00 AM IST rozana
+    - cron: '30 4 * * *'
+  workflow_dispatch: # Yeh hume manual test ka option dega
+
+jobs:
+  run-mailer:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install gspread oauth2client pytz
+
+    - name: Run Main Engine
+      run: python main.py
