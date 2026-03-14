@@ -25,7 +25,7 @@ IST = pytz.timezone('Asia/Kolkata')
 
 def check_business_hours():
     current_time = datetime.now(IST)
-    if 10 <= current_time.hour < 18:
+    if 10 <= current_time.hour < 23:
         return True
     return False
 
