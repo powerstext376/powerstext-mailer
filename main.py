@@ -18,7 +18,7 @@ print("🚀 Powerstext Smart Engine Starting...\n")
 SHEET_NAME = "Powerstext Mailer"  # 🚨 Yahan Apni Google Sheet Ka Exact Naam Daalein
 REPLY_TO_EMAIL = "sales@powerstext.com"
 FOLLOW_UP_GAP_DAYS = 3 
-WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwFM2w8XszcLsMxu6xcALv3AXCW4vkw_mus2Q-kYHxErCwek5_Ok75zLdhzIMKisCGRNA/exec"
+WEBHOOK_URL = "https://powerstext.com/track.php"
 # ==========================================
 
 IST = pytz.timezone('Asia/Kolkata')
