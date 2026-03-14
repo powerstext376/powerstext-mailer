@@ -122,7 +122,7 @@ try:
         current_level = task['level']
 
         if current_level not in templates_dict:
-            current_level = 'Path_C' 
+            current_level = 'Intro' 
             
         temp_data = templates_dict.get(current_level)
         if not temp_data:
