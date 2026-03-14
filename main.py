@@ -15,7 +15,7 @@ print("🚀 Powerstext Smart Engine Starting...\n")
 # ==========================================
 # ⚙️ MAIN SETTINGS 
 # ==========================================
-SHEET_NAME = "Powerstext Mailer"  # 🚨 Yahan Apni Sheet Ka Naam Daalein
+SHEET_NAME = "Powerstext Mailer"  # 🚨 Yahan Apni Google Sheet Ka Exact Naam Daalein
 REPLY_TO_EMAIL = "sales@powerstext.com"
 FOLLOW_UP_GAP_DAYS = 3 
 WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwFM2w8XszcLsMxu6xcALv3AXCW4vkw_mus2Q-kYHxErCwek5_Ok75zLdhzIMKisCGRNA/exec"
@@ -59,7 +59,13 @@ try:
         level = str(t['Template_Level']).strip()
         templates_dict[level] = {'subject': t['Subject_Line'], 'body': t['Email_Body_HTML']}
 
-    active_accounts = [acc for acc in all_accounts if str(acc.get('Status', '')).strip().lower() == 'active']
+    # 👇 NAYA LOGIC: Active Accounts ke sath unka Row Number bhi save kar rahe hain 👇
+    active_accounts = []
+    for i, acc in enumerate(all_accounts, start=2): # Row 2 se data shuru hota hai
+        if str(acc.get('Status', '')).strip().lower() == 'active':
+            acc['sheet_row'] = i
+            active_accounts.append(acc)
+
     if not active_accounts:
         print("❌ Error: Koi bhi Sender Account 'Active' nahi hai.")
         exit()
@@ -127,7 +133,7 @@ try:
         app_password = str(current_sender['App_Password']).replace(" ", "")
         provider = str(current_sender['Provider']).strip().lower()
 
-        print(f"\n➡️ Sending [{current_level}] to: {client_email}")
+        print(f"\n➡️ Sending [{current_level}] to: {client_email} via {sender_email}")
 
         # ==========================================
         # 🕵️ SMART TRACKING INJECTION
@@ -169,6 +175,7 @@ try:
             
             print("✅ Mail Sent Successfully!")
 
+            # 1. Update Leads Tab
             next_level = 'Path_C' if current_level == 'Intro' else 'Completed'
             next_status = 'In-Progress' if next_level != 'Completed' else 'Completed'
             today_str = today_date.strftime("%Y-%m-%d")
@@ -177,6 +184,15 @@ try:
             leads_tab.update_cell(row_index, 3, next_level)
             leads_tab.update_cell(row_index, 4, today_str)
 
+            # 👇 NAYA LOGIC: Update Accounts Tab (Daily Sent Count) 👇
+            acc_row = current_sender['sheet_row']
+            current_count = current_sender.get('Daily_Sent_Count', '')
+            new_count = int(current_count) + 1 if str(current_count).strip().isdigit() else 1
+            
+            accounts_tab.update_cell(acc_row, 4, new_count)
+            current_sender['Daily_Sent_Count'] = new_count # Agle round ke liye count update kar diya
+
+            # Move to next sender account
             sender_index = (sender_index + 1) % len(active_accounts)
 
             delay = random.randint(5, 10)
@@ -192,4 +208,4 @@ try:
 except Exception as e:
     print("\n❌ SYSTEM CRASH ERROR:")
     print(e)
-            
+    
