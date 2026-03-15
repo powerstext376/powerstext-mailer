@@ -16,7 +16,7 @@ creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', sco
 client = gspread.authorize(creds)
 
 # 🚨 YAHAN APNI GOOGLE SHEET KA URL DAALEIN 🚨
-SHEET_URL = "AAPKI_GOOGLE_SHEET_KA_LINK_YAHAN_PASTE_KAREIN"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1zucz8OEsttq8a0g9wWIKk2wtur1nOLsnjrCHkguZLsI/edit?gid=0#gid=0"
 sheet = client.open_by_url(SHEET_URL)
 
 ws_accounts = sheet.worksheet("Accounts")
