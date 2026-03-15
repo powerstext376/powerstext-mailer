@@ -17,7 +17,7 @@ print("🚀 Powerstext Smart AI Engine Starting...\n")
 # ==========================================
 SHEET_NAME = "Powerstext Mailer"  # 🚨 YAHAN APNI SHEET KA NAAM DAALEIN
 REPLY_TO_EMAIL = "sales@powerstext.com"
-FOLLOW_UP_GAP_DAYS = 3 
+FOLLOW_UP_GAP_DAYS = 2 
 WEBHOOK_URL = "https://powerstext.com/track.php" # Aapka apna Hostinger Server
 # ==========================================
 
