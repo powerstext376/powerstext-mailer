@@ -3,6 +3,11 @@ name: Powerstext Mailer
 on:
   workflow_dispatch:
 
+# 🚨 YEH HAI WOH MAGIC LOCK 🚨
+concurrency: 
+  group: powerstext-lock
+  cancel-in-progress: false
+
 jobs:
   run-mailer:
     runs-on: ubuntu-latest
