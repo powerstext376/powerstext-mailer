@@ -1,213 +1,200 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime, timedelta
+import pytz
+import time
+import random
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import time
-import random
-from datetime import datetime
-import pytz
-import re
-import urllib.parse
-
-print("🚀 Powerstext Smart AI Engine Starting...\n")
 
 # ==========================================
-# ⚙️ MAIN SETTINGS 
+# 1. SETUP & AUTHENTICATION
 # ==========================================
-SHEET_NAME = "Powerstext Mailer"  # 🚨 YAHAN APNI SHEET KA NAAM DAALEIN
-REPLY_TO_EMAIL = "sales@powerstext.com"
-FOLLOW_UP_GAP_DAYS = 2 
-WEBHOOK_URL = "https://powerstext.com/track.php" # Aapka apna Hostinger Server
-# ==========================================
-
-IST = pytz.timezone('Asia/Kolkata')
-
-def check_business_hours():
-    current_time = datetime.now(IST)
-    # 10 AM se 6 PM tak chalega (Abhi 10 baj chuke hain toh yeh chalega)
-    if 10 <= current_time.hour < 18:
-        return True
-    return False
-
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+# Yeh credentials.json file GitHub Secrets se automatically banegi
 creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
 client = gspread.authorize(creds)
 
-try:
-    if not check_business_hours():
-        print("⏸️ System Paused: Abhi Business Hours (10 AM - 6 PM) nahi hain.")
-        exit()
+# 🚨 YAHAN APNI GOOGLE SHEET KA URL DAALEIN 🚨
+SHEET_URL = "AAPKI_GOOGLE_SHEET_KA_LINK_YAHAN_PASTE_KAREIN"
+sheet = client.open_by_url(SHEET_URL)
 
-    print("Connecting to Powerstext Database...")
-    sheet = client.open(SHEET_NAME)
+ws_accounts = sheet.worksheet("Accounts")
+ws_templates = sheet.worksheet("Templates")
+ws_leads = sheet.worksheet("Leads")
+
+# ==========================================
+# 2. TIME & WORKING HOURS CHECK
+# ==========================================
+IST = pytz.timezone('Asia/Kolkata')
+current_time = datetime.now(IST)
+today_date = current_time.date()
+
+print(f"Current Time (IST): {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+# Working Hours: Subah 8 AM se Shaam 8 PM (20:00) tak
+if not (8 <= current_time.hour < 20):
+    print("⏸️ Abhi working hours nahi hain (8 AM - 8 PM). System paused.")
+    exit()
+
+# ==========================================
+# 3. ACCOUNTS FETCH & SMART SORTING
+# ==========================================
+all_accounts = ws_accounts.get_all_records()
+active_accounts = []
+
+for i, acc in enumerate(all_accounts, start=2):
+    if str(acc.get('Status', '')).strip().lower() == 'active':
+        acc['sheet_row'] = i
+        active_accounts.append(acc)
+
+if not active_accounts:
+    print("❌ Error: Koi bhi Sender Account 'Active' nahi hai.")
+    exit()
+
+# Sort logic: Jisne sabse kam bheja hai wo top par aayega
+def get_sent_count(account):
+    count = str(account.get('Daily_Sent_Count', '')).strip()
+    return int(count) if count.isdigit() else 0
+
+active_accounts.sort(key=get_sent_count)
+accounts_headers = ws_accounts.row_values(1)
+count_col_index = accounts_headers.index('Daily_Sent_Count') + 1
+
+# ==========================================
+# 4. TEMPLATES FETCH
+# ==========================================
+templates_data = ws_templates.get_all_records()
+templates = {}
+for t in templates_data:
+    t_level = str(t.get('Template_Level', '')).strip()
+    templates[t_level] = {
+        'Subject': str(t.get('Subject_Line', '')),
+        'Body': str(t.get('Email_Body_HTML', ''))
+    }
+
+# ==========================================
+# 5. LEADS FETCH & QUEUE BUILDING
+# ==========================================
+leads_data = ws_leads.get_all_records()
+priority_queue = []
+normal_queue = []
+
+for i, lead in enumerate(leads_data, start=2):
+    status = str(lead.get('Email_Status', '')).strip()
+    follow_up_str = str(lead.get('Follow_Up', '')).strip()
     
-    accounts_tab = sheet.worksheet("Accounts")
-    leads_tab = sheet.worksheet("Leads")
-    templates_tab = sheet.worksheet("Templates")
-    blacklist_tab = sheet.worksheet("Blacklist")
-
-    all_accounts = accounts_tab.get_all_records()
-    all_templates = templates_tab.get_all_records()
-    blacklist_data = blacklist_tab.get_all_values()
-    leads_data = leads_tab.get_all_values()
-
-    blacklisted_emails = set([row[0].strip().lower() for row in blacklist_data if row])
+    lead['sheet_row'] = i
     
-    templates_dict = {}
-    for t in all_templates:
-        level = str(t['Template_Level']).strip()
-        templates_dict[level] = {'subject': t['Subject_Line'], 'body': t['Email_Body_HTML']}
-
-    active_accounts = []
-    for i, acc in enumerate(all_accounts, start=2): 
-        if str(acc.get('Status', '')).strip().lower() == 'active':
-            acc['sheet_row'] = i
-            active_accounts.append(acc)
-
-    if not active_accounts:
-        print("❌ Error: Koi bhi Sender Account 'Active' nahi hai.")
-        exit()
-
-    today_date = datetime.now(IST).date()
-    priority_queue = [] 
-    normal_queue = []   
-
-    print("🔍 Scanning leads behavior and building queue...")
-    
-    for index, row in enumerate(leads_data[1:], start=2): 
-        while len(row) < 6: row.append("") 
-            
-        email = row[0].strip()
-        status = row[1].strip().lower()
-        last_date_str = row[3].strip()
-        
-        has_opened = str(row[4]).strip() != ""
-        has_clicked = str(row[5]).strip() != ""
-
-        if email.lower() in blacklisted_emails:
-            if status != 'blacklisted':
-                leads_tab.update_cell(index, 2, 'Blacklisted')
-            continue
-
-        if status == 'completed':
-            continue
-
-        if status == 'in-progress':
-            try:
-                last_date = datetime.strptime(last_date_str, "%Y-%m-%d").date()
-                days_passed = (today_date - last_date).days
-                
-                if days_passed >= FOLLOW_UP_GAP_DAYS:
-                    if has_clicked:
-                        dynamic_level = 'Path_Clicked'
-                    elif has_opened:
-                        dynamic_level = 'Path_Opened'
-                    else:
-                        dynamic_level = 'Path_Unread'
-                        
-                    priority_queue.append({"row_index": index, "email": email, "level": dynamic_level})
-            except ValueError:
-                pass 
-
-        elif status == 'pending':
-            normal_queue.append({"row_index": index, "email": email, "level": 'Intro'})
-
-    sending_queue = priority_queue + normal_queue
-
-    if not sending_queue:
-        print("✅ Aaj ke liye koi task pending nahi hai!")
-        exit()
-
-    sender_index = 0
-
-    for task in sending_queue:
-        if not check_business_hours():
-            print("\n⏰ 6:00 PM baj gaye. Business hours over. Stopping engine...")
-            break
-
-        client_email = task['email']
-        row_index = task['row_index']
-        current_level = task['level']
-
-        if current_level not in templates_dict:
-            current_level = 'Intro' 
-            
-        temp_data = templates_dict.get(current_level)
-        if not temp_data:
-            continue
-
-        current_sender = active_accounts[sender_index]
-        sender_email = current_sender['Email_ID']
-        app_password = str(current_sender['App_Password']).replace(" ", "")
-        provider = str(current_sender['Provider']).strip().lower()
-
-        print(f"\n➡️ Sending [{current_level}] to: {client_email} via {sender_email}")
-
-        safe_email = urllib.parse.quote(client_email)
-        raw_body = temp_data['body']
-        
-        # 🚀 ANTI-CACHE OPEN TRACKING PIXEL (Gmail ko bypass karne ke liye) 🚀
-        rand_num = random.randint(100000, 999999) 
-        pixel_url = f"{WEBHOOK_URL}?email={safe_email}&action=open&nocache={rand_num}"
-        pixel_html = f'<img src="{pixel_url}" width="1" height="1" style="display:none;" />'
-        final_body = raw_body + pixel_html
-
-        # Click Tracking Wrapper
-        def wrap_link(match):
-            original_url = match.group(1)
-            safe_redirect = urllib.parse.quote(original_url, safe='')
-            return f'href="{WEBHOOK_URL}?email={safe_email}&action=click&redirect={safe_redirect}"'
-            
-        final_body = re.sub(r'href="(https://wa\.me/[^"]+)"', wrap_link, final_body)
-
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = temp_data['subject']
-        msg['From'] = f"Powerstext Service <{sender_email}>"
-        msg['To'] = client_email
-        msg.add_header('reply-to', REPLY_TO_EMAIL)
-        msg.attach(MIMEText(final_body, 'html'))
-
+    if status.lower() == 'pending':
+        normal_queue.append((lead, 'Intro'))
+    elif status.lower() == 'in-progress' and follow_up_str:
         try:
-            if provider == 'gmail':
-                server = smtplib.SMTP('smtp.gmail.com', 587)
-                server.starttls()
-            else:
-                server = smtplib.SMTP_SSL('smtp.hostinger.com', 465)
-                
-            server.login(sender_email, app_password)
-            server.sendmail(sender_email, client_email, msg.as_string())
-            server.quit()
-            
-            print("✅ Mail Sent Successfully!")
+            follow_up_date = datetime.strptime(follow_up_str, '%Y-%m-%d').date()
+            if today_date >= follow_up_date:
+                if str(lead.get('Clicked', '')).strip().lower() == 'yes':
+                    priority_queue.append((lead, 'Path_Clicked'))
+                elif str(lead.get('Opened', '')).strip().lower() == 'yes':
+                    priority_queue.append((lead, 'Path_Opened'))
+                else:
+                    priority_queue.append((lead, 'Path_Unread'))
+        except Exception:
+            pass
 
-            today_str = today_date.strftime("%Y-%m-%d")
-            next_status = 'In-Progress' if current_level == 'Intro' else 'Completed'
+# MAX UTILIZATION: Ek trigger me 400 mails (Takes approx 27 mins)
+MAX_MAILS_PER_RUN = 400
+sending_queue = (priority_queue + normal_queue)[:MAX_MAILS_PER_RUN]
 
-            leads_tab.update_cell(row_index, 2, next_status)
-            leads_tab.update_cell(row_index, 3, current_level)
-            leads_tab.update_cell(row_index, 4, today_str)
+if not sending_queue:
+    print("✅ Aaj ke liye koi task pending nahi hai!")
+    exit()
 
-            acc_row = current_sender['sheet_row']
-            current_count = current_sender.get('Daily_Sent_Count', '')
-            new_count = int(current_count) + 1 if str(current_count).strip().isdigit() else 1
-            
-            accounts_tab.update_cell(acc_row, 4, new_count)
-            current_sender['Daily_Sent_Count'] = new_count 
+print(f"🚀 Total leads in queue for this run: {len(sending_queue)}")
 
+# ==========================================
+# 6. SENDING ENGINE (ROTATION & LIMITS)
+# ==========================================
+sender_index = 0
+
+for lead_item in sending_queue:
+    lead, template_key = lead_item
+    target_email = str(lead.get('Client_Email', '')).strip()
+    
+    if not target_email:
+        continue
+        
+    template = templates.get(template_key)
+    if not template:
+        continue
+        
+    # Account Check: Find an account that has sent less than 10 mails today
+    current_sender = None
+    attempts = 0
+    while attempts < len(active_accounts):
+        temp_sender = active_accounts[sender_index]
+        sent_count = get_sent_count(temp_sender)
+        
+        if sent_count < 10:  # 🚨 10 MAILS PER ACCOUNT LIMIT 🚨
+            current_sender = temp_sender
+            break
+        else:
+            # Agar limit puri ho gayi, toh list me agla account dekho
             sender_index = (sender_index + 1) % len(active_accounts)
-
-            delay = random.randint(5, 10)
-            print(f"⚡ Fast Sleeping for {delay} seconds...")
-            time.sleep(delay)
-
-        except Exception as e:
-            print(f"❌ Failed. Error: {e}")
-            leads_tab.update_cell(row_index, 2, 'Failed')
-
-    print("\n🎉 Engine Process Completed gracefully!")
-
-except Exception as e:
-    print("\n❌ SYSTEM CRASH ERROR:")
-    print(e)
+            attempts += 1
             
+    if not current_sender:
+        print("🛑 WARNING: Saare active accounts ki 10 mails/day ki limit poori ho gayi hai!")
+        break
+        
+    sender_email = str(current_sender.get('Email', '')).strip()
+    sender_pass = str(current_sender.get('App_Password', '')).strip()
+    
+    # Auto-Detect Hostinger or Gmail Server
+    if 'gmail.com' in sender_email.lower():
+        smtp_host = 'smtp.gmail.com'
+    else:
+        smtp_host = 'smtp.hostinger.com'
+        
+    try:
+        # Construct HTML Email
+        msg = MIMEMultipart()
+        msg['From'] = f"Powerstext Services <{sender_email}>"
+        msg['To'] = target_email
+        msg['Subject'] = template['Subject']
+        msg.attach(MIMEText(template['Body'], 'html'))
+        
+        # Send Email via SMTP
+        server = smtplib.SMTP_SSL(smtp_host, 465)
+        server.login(sender_email, sender_pass)
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"✅ Sent '{template_key}' to {target_email} via {sender_email}")
+        
+        # 1. Update Lead Status in Sheet
+        if template_key == 'Intro':
+            next_follow_up = (today_date + timedelta(days=2)).strftime('%Y-%m-%d')
+            ws_leads.update_cell(lead['sheet_row'], 2, 'In-Progress') 
+            ws_leads.update_cell(lead['sheet_row'], 3, next_follow_up) 
+            ws_leads.update_cell(lead['sheet_row'], 4, today_date.strftime('%Y-%m-%d'))
+        else:
+            ws_leads.update_cell(lead['sheet_row'], 2, 'Completed')
+            
+        # 2. Update Sender's Daily Sent Count in Sheet
+        new_count = get_sent_count(current_sender) + 1
+        current_sender['Daily_Sent_Count'] = new_count
+        ws_accounts.update_cell(current_sender['sheet_row'], count_col_index, new_count)
+            
+        # 3. Rotate to Next Sender Account for the next loop
+        sender_index = (sender_index + 1) % len(active_accounts)
+        
+        # ⚡ FAST DELAY (Taaki 30 min window maximum utilize ho)
+        delay = random.randint(2, 4)
+        print(f"⏳ Sleeping for {delay} seconds...")
+        time.sleep(delay)
+        
+    except Exception as e:
+        print(f"❌ Failed to send to {target_email}: {str(e)}")
+
+print("🎉 Run Completed Successfully! Batch Done.")
