@@ -156,7 +156,7 @@ for lead_item in sending_queue:
     else:
         smtp_host = 'smtp.hostinger.com'
         
-    try:
+        try:
         # Construct HTML Email
         msg = MIMEMultipart()
         msg['From'] = f"Powerstext Services <{sender_email}>"
@@ -195,7 +195,9 @@ for lead_item in sending_queue:
         print(f"⏳ Sleeping for {delay} seconds...")
         time.sleep(delay)
         
-        except Exception as e:
+    except Exception as e:
         print(f"❌ FAIL -> Target: {target_email} | Sender: {sender_email} | Server: {smtp_host} | Pass Length: {len(sender_pass)}")
         print(f"Error Details: {str(e)}")
+
+print("🎉 Run Completed Successfully! Batch Done.")
     
