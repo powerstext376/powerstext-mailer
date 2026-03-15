@@ -145,7 +145,7 @@ for lead_item in sending_queue:
         print("🛑 WARNING: Saare active accounts ki 10 mails/day ki limit poori ho gayi hai!")
         break
         
-    sender_email = str(current_sender.get('Email', '')).strip()
+    sender_email = str(current_sender.get('Email_ID', '')).strip()
     sender_pass = str(current_sender.get('App_Password', '')).strip()
     
     # Auto-Detect Hostinger or Gmail Server
