@@ -161,6 +161,7 @@ for lead_item in sending_queue:
         msg = MIMEMultipart()
         msg['From'] = f"Powerstext Services <{sender_email}>"
         msg['To'] = target_email
+        msg['Reply-To'] = "sales@powerstext.com"
         msg['Subject'] = template['Subject']
         msg.attach(MIMEText(template['Body'], 'html'))
         
