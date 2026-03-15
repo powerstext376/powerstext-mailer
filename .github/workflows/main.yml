@@ -3,7 +3,7 @@ name: Powerstext Daily Auto-Engine
 on:
   schedule:
     # 4:30 AM UTC = theek 10:00 AM IST rozana
-    - cron: '30 4 * * *'
+    - cron: '0 * * *'
   workflow_dispatch: # Yeh hume manual test ka option dega
 
 jobs:
