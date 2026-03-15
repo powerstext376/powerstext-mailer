@@ -15,7 +15,7 @@ print("🚀 Powerstext Smart AI Engine Starting...\n")
 # ==========================================
 # ⚙️ MAIN SETTINGS 
 # ==========================================
-SHEET_NAME = "Powerstext Mailer"  # 🚨 YAHAN APNI SHEET KA NAAM DAALEIN
+SHEET_NAME = "Aapki_Sheet_Ka_Naam"  # 🚨 YAHAN APNI SHEET KA NAAM DAALEIN
 REPLY_TO_EMAIL = "sales@powerstext.com"
 FOLLOW_UP_GAP_DAYS = 3 
 WEBHOOK_URL = "https://powerstext.com/track.php" # Aapka apna Hostinger Server
@@ -25,7 +25,8 @@ IST = pytz.timezone('Asia/Kolkata')
 
 def check_business_hours():
     current_time = datetime.now(IST)
-    if 0 <= current_time.hour < 24:
+    # 10 AM se 6 PM tak chalega (Abhi 10 baj chuke hain toh yeh chalega)
+    if 10 <= current_time.hour < 18:
         return True
     return False
 
@@ -81,7 +82,6 @@ try:
         status = row[1].strip().lower()
         last_date_str = row[3].strip()
         
-        # 🕵️ Client Behavior Check (Opened / Clicked Columns)
         has_opened = str(row[4]).strip() != ""
         has_clicked = str(row[5]).strip() != ""
 
@@ -99,7 +99,6 @@ try:
                 days_passed = (today_date - last_date).days
                 
                 if days_passed >= FOLLOW_UP_GAP_DAYS:
-                    # 👇 DYNAMIC BEHAVIOR LOGIC 👇
                     if has_clicked:
                         dynamic_level = 'Path_Clicked'
                     elif has_opened:
@@ -124,13 +123,13 @@ try:
 
     for task in sending_queue:
         if not check_business_hours():
+            print("\n⏰ 6:00 PM baj gaye. Business hours over. Stopping engine...")
             break
 
         client_email = task['email']
         row_index = task['row_index']
         current_level = task['level']
 
-        # Fallback to Intro if template is missing
         if current_level not in templates_dict:
             current_level = 'Intro' 
             
@@ -148,10 +147,13 @@ try:
         safe_email = urllib.parse.quote(client_email)
         raw_body = temp_data['body']
         
-        pixel_url = f"{WEBHOOK_URL}?email={safe_email}&action=open"
+        # 🚀 ANTI-CACHE OPEN TRACKING PIXEL (Gmail ko bypass karne ke liye) 🚀
+        rand_num = random.randint(100000, 999999) 
+        pixel_url = f"{WEBHOOK_URL}?email={safe_email}&action=open&nocache={rand_num}"
         pixel_html = f'<img src="{pixel_url}" width="1" height="1" style="display:none;" />'
         final_body = raw_body + pixel_html
 
+        # Click Tracking Wrapper
         def wrap_link(match):
             original_url = match.group(1)
             safe_redirect = urllib.parse.quote(original_url, safe='')
@@ -179,17 +181,13 @@ try:
             
             print("✅ Mail Sent Successfully!")
 
-            # Update Leads Tab
             today_str = today_date.strftime("%Y-%m-%d")
-            
-            # Agar 'Intro' bheja hai toh In-Progress. Agar Path follow-up bhej diya toh Completed taaki loop na bane.
             next_status = 'In-Progress' if current_level == 'Intro' else 'Completed'
 
             leads_tab.update_cell(row_index, 2, next_status)
             leads_tab.update_cell(row_index, 3, current_level)
             leads_tab.update_cell(row_index, 4, today_str)
 
-            # Update Accounts Tab
             acc_row = current_sender['sheet_row']
             current_count = current_sender.get('Daily_Sent_Count', '')
             new_count = int(current_count) + 1 if str(current_count).strip().isdigit() else 1
@@ -212,4 +210,4 @@ try:
 except Exception as e:
     print("\n❌ SYSTEM CRASH ERROR:")
     print(e)
-    
+            
