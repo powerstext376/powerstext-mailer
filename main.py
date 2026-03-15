@@ -92,9 +92,13 @@ for i, lead in enumerate(leads_data, start=2):
         try:
             follow_up_date = datetime.strptime(follow_up_str, '%Y-%m-%d').date()
             if today_date >= follow_up_date:
-                if str(lead.get('Clicked', '')).strip().lower() == 'yes':
+                                # Naya Logic: Agar column khali nahi hai (Yani Yes ya Date/Time kuch bhi aa gaya hai)
+                clicked_val = str(lead.get('Clicked', '')).strip()
+                opened_val = str(lead.get('Opened', '')).strip()
+                
+                if clicked_val != '' and clicked_val.lower() != 'no':
                     priority_queue.append((lead, 'Path_Clicked'))
-                elif str(lead.get('Opened', '')).strip().lower() == 'yes':
+                elif opened_val != '' and opened_val.lower() != 'no':
                     priority_queue.append((lead, 'Path_Opened'))
                 else:
                     priority_queue.append((lead, 'Path_Unread'))
