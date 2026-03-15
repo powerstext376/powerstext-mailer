@@ -12,12 +12,11 @@ from email.mime.multipart import MIMEMultipart
 # 1. SETUP & AUTHENTICATION
 # ==========================================
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-# Yeh credentials.json file GitHub Secrets se automatically banegi
 creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
 client = gspread.authorize(creds)
 
 # 🚨 YAHAN APNI GOOGLE SHEET KA URL DAALEIN 🚨
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1zucz8OEsttq8a0g9wWIKk2wtur1nOLsnjrCHkguZLsI/edit?gid=0#gid=0"
+SHEET_URL = "AAPKI_GOOGLE_SHEET_KA_LINK_YAHAN_PASTE_KAREIN"
 sheet = client.open_by_url(SHEET_URL)
 
 ws_accounts = sheet.worksheet("Accounts")
@@ -34,7 +33,7 @@ today_date = current_time.date()
 print(f"Current Time (IST): {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
 # Working Hours: Subah 8 AM se Shaam 8 PM (20:00) tak
-if not (0 <= current_time.hour < 24):
+if not (8 <= current_time.hour < 20):
     print("⏸️ Abhi working hours nahi hain (8 AM - 8 PM). System paused.")
     exit()
 
@@ -75,7 +74,7 @@ for t in templates_data:
     }
 
 # ==========================================
-# 5. LEADS FETCH & QUEUE BUILDING
+# 5. LEADS FETCH & QUEUE BUILDING (INCLUDES FOLLOW-UP)
 # ==========================================
 leads_data = ws_leads.get_all_records()
 priority_queue = []
@@ -139,7 +138,6 @@ for lead_item in sending_queue:
             current_sender = temp_sender
             break
         else:
-            # Agar limit puri ho gayi, toh list me agla account dekho
             sender_index = (sender_index + 1) % len(active_accounts)
             attempts += 1
             
@@ -156,7 +154,7 @@ for lead_item in sending_queue:
     else:
         smtp_host = 'smtp.hostinger.com'
         
-        try:
+    try:
         # Construct HTML Email
         msg = MIMEMultipart()
         msg['From'] = f"Powerstext Services <{sender_email}>"
@@ -190,14 +188,15 @@ for lead_item in sending_queue:
         # 3. Rotate to Next Sender Account for the next loop
         sender_index = (sender_index + 1) % len(active_accounts)
         
-        # ⚡ FAST DELAY (Taaki 30 min window maximum utilize ho)
+        # ⚡ FAST DELAY
         delay = random.randint(2, 4)
         print(f"⏳ Sleeping for {delay} seconds...")
         time.sleep(delay)
         
     except Exception as e:
+        # Naya Debugger: Yeh batayega exact kyu login fail ho raha hai
         print(f"❌ FAIL -> Target: {target_email} | Sender: {sender_email} | Server: {smtp_host} | Pass Length: {len(sender_pass)}")
         print(f"Error Details: {str(e)}")
 
 print("🎉 Run Completed Successfully! Batch Done.")
-    
+              
