@@ -31,7 +31,7 @@ current_time = datetime.now(IST)
 today_date = current_time.date()
 
 print(f"Current Time (IST): {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
-if not (0 <= current_time.hour < 24):
+if not (8 <= current_time.hour < 20):
     print("⏸️ Abhi working hours nahi hain (8 AM - 8 PM). System paused.")
     exit()
 
@@ -112,7 +112,6 @@ print(f"🚀 Total leads in queue for this run: {len(sending_queue)}")
 # 6. ENGINE & DYNAMIC TRACKING
 # ==========================================
 sender_index = 0
-# 🚨 YAHAN APNA TRACKING URL CONFIRM KAREIN (track.php ya trash.php jo bhi apne server pe rakha hai)
 TRACKING_BASE_URL = "https://powerstext.com/track.php"
 
 for lead_item in sending_queue:
@@ -143,20 +142,20 @@ for lead_item in sending_queue:
     
     smtp_host = 'smtp.gmail.com' if 'gmail.com' in sender_email.lower() else 'smtp.hostinger.com'
         
-        try:
-        # 🚀 DATA PRIVACY: Target Email Masking (Logs leak bachane ke liye)
+    try:
+        # 🚀 DATA PRIVACY: Target Email Masking
         if '@' in target_email:
             name_part, domain_part = target_email.split('@')
             masked_target = name_part[:2] + "****@" + domain_part
         else:
             masked_target = "Hidden_Email"
 
-        # 🚀 TRACKING MAGIC START 🚀
+        # 🚀 TRACKING MAGIC START
         custom_body = template['Body'].replace("{{EMAIL}}", target_email)
         cache_buster = random.randint(1000000, 9999999)
         open_pixel = f'<img src="{TRACKING_BASE_URL}?email={target_email}&action=open&rnd={cache_buster}" width="1" height="1" style="display:none;" />'
         final_body = custom_body + open_pixel
-        # 🚀 TRACKING MAGIC END 🚀
+        # 🚀 TRACKING MAGIC END
 
         msg = MIMEMultipart()
         msg['From'] = f"Powerstext Services <{sender_email}>"
@@ -170,7 +169,7 @@ for lead_item in sending_queue:
         server.send_message(msg)
         server.quit()
         
-        # 🚨 NAYA PRINT: Ab log me sirf masked email (aadha chupa hua) dikhega
+        # 🚨 NAYA PRINT: Ab log me sirf masked email dikhega
         print(f"✅ Sent '{template_key}' to {masked_target} via {sender_email}")
         
         if template_key == 'Intro':
@@ -195,5 +194,5 @@ for lead_item in sending_queue:
         # 🚨 NAYA PRINT: Error log me bhi target email mask ho jayega
         print(f"❌ FAIL -> Target: {masked_target} | Sender: {sender_email} | Server: {smtp_host}")
         print(f"Error Details: {str(e)}")
-        
+
 print("🎉 Run Completed Successfully! Batch Done.")
