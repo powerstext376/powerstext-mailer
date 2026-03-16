@@ -143,16 +143,18 @@ for lead_item in sending_queue:
     
     smtp_host = 'smtp.gmail.com' if 'gmail.com' in sender_email.lower() else 'smtp.hostinger.com'
         
-    try:
+        try:
+        # 🚀 DATA PRIVACY: Target Email Masking (Logs leak bachane ke liye)
+        if '@' in target_email:
+            name_part, domain_part = target_email.split('@')
+            masked_target = name_part[:2] + "****@" + domain_part
+        else:
+            masked_target = "Hidden_Email"
+
         # 🚀 TRACKING MAGIC START 🚀
-        # 1. Sheet se aaye HTML me {{EMAIL}} ko asil email se replace karega
         custom_body = template['Body'].replace("{{EMAIL}}", target_email)
-        
-        # 2. Dynamic Open Pixel (Har bar naya number taaki Gmail cache na kare)
         cache_buster = random.randint(1000000, 9999999)
         open_pixel = f'<img src="{TRACKING_BASE_URL}?email={target_email}&action=open&rnd={cache_buster}" width="1" height="1" style="display:none;" />'
-        
-        # 3. Final Body taiyar (Template + Invisible Tracking Image)
         final_body = custom_body + open_pixel
         # 🚀 TRACKING MAGIC END 🚀
 
@@ -168,7 +170,8 @@ for lead_item in sending_queue:
         server.send_message(msg)
         server.quit()
         
-        print(f"✅ Sent '{template_key}' to {target_email} via {sender_email}")
+        # 🚨 NAYA PRINT: Ab log me sirf masked email (aadha chupa hua) dikhega
+        print(f"✅ Sent '{template_key}' to {masked_target} via {sender_email}")
         
         if template_key == 'Intro':
             next_follow_up = (today_date + timedelta(days=2)).strftime('%Y-%m-%d')
@@ -189,7 +192,8 @@ for lead_item in sending_queue:
         time.sleep(delay)
         
     except Exception as e:
-        print(f"❌ FAIL -> Target: {target_email} | Sender: {sender_email} | Server: {smtp_host}")
+        # 🚨 NAYA PRINT: Error log me bhi target email mask ho jayega
+        print(f"❌ FAIL -> Target: {masked_target} | Sender: {sender_email} | Server: {smtp_host}")
         print(f"Error Details: {str(e)}")
-
+        
 print("🎉 Run Completed Successfully! Batch Done.")
