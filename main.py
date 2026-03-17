@@ -173,7 +173,7 @@ for lead_item in sending_queue:
         print(f"✅ Sent '{template_key}' to {masked_target} via {sender_email}")
         
         if template_key == 'Intro':
-            next_follow_up = (today_date + timedelta(days=2)).strftime('%Y-%m-%d')
+            next_follow_up = (today_date + timedelta(days=1)).strftime('%Y-%m-%d')
             ws_leads.update_cell(lead['sheet_row'], 2, 'In-Progress') 
             ws_leads.update_cell(lead['sheet_row'], 3, next_follow_up) 
             ws_leads.update_cell(lead['sheet_row'], 4, today_date.strftime('%Y-%m-%d'))
