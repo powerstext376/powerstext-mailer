@@ -31,7 +31,7 @@ current_time = datetime.now(IST)
 today_date = current_time.date()
 
 print(f"Current Time (IST): {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
-if not (10 <= current_time.hour < 18):
+if not (8 <= current_time.hour < 20):
     print("⏸️ Abhi working hours nahi hain (8 AM - 8 PM). System paused.")
     exit()
 
@@ -56,6 +56,7 @@ def get_sent_count(account):
 active_accounts.sort(key=get_sent_count)
 accounts_headers = ws_accounts.row_values(1)
 count_col_index = accounts_headers.index('Daily_Sent_Count') + 1
+status_col_index = accounts_headers.index('Status') + 1  # 🚨 NAYI LINE: Status column dhoondhne ke liye
 
 # ==========================================
 # 4. TEMPLATES
@@ -169,7 +170,6 @@ for lead_item in sending_queue:
         server.send_message(msg)
         server.quit()
         
-        # 🚨 NAYA PRINT: Ab log me sirf masked email dikhega
         print(f"✅ Sent '{template_key}' to {masked_target} via {sender_email}")
         
         if template_key == 'Intro':
@@ -191,8 +191,23 @@ for lead_item in sending_queue:
         time.sleep(delay)
         
     except Exception as e:
-        # 🚨 NAYA PRINT: Error log me bhi target email mask ho jayega
+        error_msg = str(e)
         print(f"❌ FAIL -> Target: {masked_target} | Sender: {sender_email} | Server: {smtp_host}")
-        print(f"Error Details: {str(e)}")
+        print(f"Error Details: {error_msg}")
+        
+        # 🚨 SMART AUTO-SKIP LOGIC (Agar Login fail ho jaye)
+        if "535" in error_msg or "auth" in error_msg.lower() or "534" in error_msg:
+            print(f"⚠️ Account {sender_email} fail ho gaya. Marking as 'Inactive' in sheet...")
+            try:
+                # 1. Sheet me Inactive likh do
+                ws_accounts.update_cell(current_sender['sheet_row'], status_col_index, 'Inactive')
+                # 2. Memory se account hata do taaki isi run me wapas na aaye
+                if current_sender in active_accounts:
+                    active_accounts.remove(current_sender)
+                # 3. Sender index theek kar lo
+                if len(active_accounts) > 0:
+                    sender_index = sender_index % len(active_accounts)
+            except Exception as inner_e:
+                print(f"Status update fail: {str(inner_e)}")
 
 print("🎉 Run Completed Successfully! Batch Done.")
