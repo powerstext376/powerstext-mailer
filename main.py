@@ -31,7 +31,7 @@ current_time = datetime.now(IST)
 today_date = current_time.date()
 
 print(f"Current Time (IST): {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
-if not (0 <= current_time.hour < 24):
+if not (10 <= current_time.hour < 18):
     print("⏸️ Abhi working hours nahi hain (8 AM - 8 PM). System paused.")
     exit()
 
