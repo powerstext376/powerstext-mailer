@@ -16,7 +16,7 @@ creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', sco
 client = gspread.authorize(creds)
 
 # 🚨 APNI GOOGLE SHEET KA LINK YAHAN DAALEIN 🚨
-SHEET_URL = "https://docs.google.com/spreadsheets/u/0/d/1zucz8OEsttq8a0g9wWIKk2wtur1nOLsnjrCHkguZLsI/htmlview"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1zucz8OEsttq8a0g9wWIKk2wtur1nOLsnjrCHkguZLsI/edit?usp=drivesdk"
 sheet = client.open_by_url(SHEET_URL)
 
 ws_accounts = sheet.worksheet("Accounts")
