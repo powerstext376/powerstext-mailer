@@ -209,5 +209,25 @@ for lead_item in sending_queue:
                     sender_index = sender_index % len(active_accounts)
             except Exception as inner_e:
                 print(f"Status update fail: {str(inner_e)}")
+                except Exception as e:
+        error_msg = str(e)
+        print(f"❌ FAIL -> Target: {masked_target} | Sender: {sender_email} | Server: {smtp_host}")
+        print(f"Error Details: {error_msg}")
+        
+        # 🚨 SMART AUTO-SKIP LOGIC (Updated with Error 451)
+        if "535" in error_msg or "auth" in error_msg.lower() or "534" in error_msg or "451" in error_msg or "lookup failure" in error_msg.lower():
+            print(f"⚠️ Account {sender_email} fail ho gaya. Marking as 'Inactive' in sheet...")
+            try:
+                # 1. Sheet me Inactive likh do
+                ws_accounts.update_cell(current_sender['sheet_row'], status_col_index, 'Inactive')
+                # 2. Memory se account hata do
+                if current_sender in active_accounts:
+                    active_accounts.remove(current_sender)
+                # 3. Sender index theek kar lo
+                if len(active_accounts) > 0:
+                    sender_index = sender_index % len(active_accounts)
+            except Exception as inner_e:
+                print(f"Status update fail: {str(inner_e)}")
+            
 
 print("🎉 Run Completed Successfully! Batch Done.")
