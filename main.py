@@ -16,7 +16,7 @@ creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', sco
 client = gspread.authorize(creds)
 
 # 🚨 APNI GOOGLE SHEET KA LINK YAHAN DAALEIN 🚨
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1zucz8OEsttq8a0g9wWIKk2wtur1nOLsnjrCHkguZLsI/edit?gid=0#gid=0"
+SHEET_URL = "https://docs.google.com/spreadsheets/u/0/d/1zucz8OEsttq8a0g9wWIKk2wtur1nOLsnjrCHkguZLsI/htmlview"
 sheet = client.open_by_url(SHEET_URL)
 
 ws_accounts = sheet.worksheet("Accounts")
@@ -56,7 +56,7 @@ def get_sent_count(account):
 active_accounts.sort(key=get_sent_count)
 accounts_headers = ws_accounts.row_values(1)
 count_col_index = accounts_headers.index('Daily_Sent_Count') + 1
-status_col_index = accounts_headers.index('Status') + 1  # 🚨 NAYI LINE: Status column dhoondhne ke liye
+status_col_index = accounts_headers.index('Status') + 1
 
 # ==========================================
 # 4. TEMPLATES
@@ -116,6 +116,11 @@ sender_index = 0
 TRACKING_BASE_URL = "https://powerstext.com/track.php"
 
 for lead_item in sending_queue:
+    # 🚨 Check if all accounts got deactivated during this run
+    if not active_accounts:
+        print("🛑 WARNING: Saare active accounts fail ho chuke hain. System pausing until new accounts are added or fixed.")
+        break
+
     lead, template_key = lead_item
     target_email = str(lead.get('Client_Email', '')).strip()
     if not target_email: continue
@@ -135,7 +140,7 @@ for lead_item in sending_queue:
             attempts += 1
             
     if not current_sender:
-        print("🛑 WARNING: Saare accounts ki 10 mails limit poori ho gayi hai!")
+        print("🛑 WARNING: Bachen hue saare accounts ki 10 mails limit poori ho gayi hai!")
         break
         
     sender_email = str(current_sender.get('Email_ID', '')).strip() 
@@ -151,12 +156,11 @@ for lead_item in sending_queue:
         else:
             masked_target = "Hidden_Email"
 
-        # 🚀 TRACKING MAGIC START
+        # 🚀 TRACKING MAGIC
         custom_body = template['Body'].replace("{{EMAIL}}", target_email)
         cache_buster = random.randint(1000000, 9999999)
         open_pixel = f'<img src="{TRACKING_BASE_URL}?email={target_email}&action=open&rnd={cache_buster}" width="1" height="1" style="display:none;" />'
         final_body = custom_body + open_pixel
-        # 🚀 TRACKING MAGIC END
 
         msg = MIMEMultipart()
         msg['From'] = f"Powerstext Services <{sender_email}>"
@@ -173,6 +177,7 @@ for lead_item in sending_queue:
         print(f"✅ Sent '{template_key}' to {masked_target} via {sender_email}")
         
         if template_key == 'Intro':
+            # Follow-up set to 1 day (24 hours)
             next_follow_up = (today_date + timedelta(days=1)).strftime('%Y-%m-%d')
             ws_leads.update_cell(lead['sheet_row'], 2, 'In-Progress') 
             ws_leads.update_cell(lead['sheet_row'], 3, next_follow_up) 
@@ -195,39 +200,19 @@ for lead_item in sending_queue:
         print(f"❌ FAIL -> Target: {masked_target} | Sender: {sender_email} | Server: {smtp_host}")
         print(f"Error Details: {error_msg}")
         
-        # 🚨 SMART AUTO-SKIP LOGIC (Agar Login fail ho jaye)
-        if "535" in error_msg or "auth" in error_msg.lower() or "534" in error_msg:
-            print(f"⚠️ Account {sender_email} fail ho gaya. Marking as 'Inactive' in sheet...")
-            try:
-                # 1. Sheet me Inactive likh do
-                ws_accounts.update_cell(current_sender['sheet_row'], status_col_index, 'Inactive')
-                # 2. Memory se account hata do taaki isi run me wapas na aaye
-                if current_sender in active_accounts:
-                    active_accounts.remove(current_sender)
-                # 3. Sender index theek kar lo
-                if len(active_accounts) > 0:
-                    sender_index = sender_index % len(active_accounts)
-            except Exception as inner_e:
-                print(f"Status update fail: {str(inner_e)}")
-                except Exception as e:
-        error_msg = str(e)
-        print(f"❌ FAIL -> Target: {masked_target} | Sender: {sender_email} | Server: {smtp_host}")
-        print(f"Error Details: {error_msg}")
-        
-        # 🚨 SMART AUTO-SKIP LOGIC (Updated with Error 451)
-        if "535" in error_msg or "auth" in error_msg.lower() or "534" in error_msg or "451" in error_msg or "lookup failure" in error_msg.lower():
-            print(f"⚠️ Account {sender_email} fail ho gaya. Marking as 'Inactive' in sheet...")
-            try:
-                # 1. Sheet me Inactive likh do
-                ws_accounts.update_cell(current_sender['sheet_row'], status_col_index, 'Inactive')
-                # 2. Memory se account hata do
-                if current_sender in active_accounts:
-                    active_accounts.remove(current_sender)
-                # 3. Sender index theek kar lo
-                if len(active_accounts) > 0:
-                    sender_index = sender_index % len(active_accounts)
-            except Exception as inner_e:
-                print(f"Status update fail: {str(inner_e)}")
-            
+        # 🚨 UNIVERSAL AUTO-SKIP LOGIC: Koi bhi error ho, bypass kar do!
+        print(f"⚠️ Account {sender_email} fail ho gaya. Marking as 'Inactive' in sheet...")
+        try:
+            # 1. Sheet me Inactive likh do
+            ws_accounts.update_cell(current_sender['sheet_row'], status_col_index, 'Inactive')
+            # 2. Engine ki memory se is account ko hata do
+            if current_sender in active_accounts:
+                active_accounts.remove(current_sender)
+            # 3. Sender index theek kar lo
+            if len(active_accounts) > 0:
+                sender_index = sender_index % len(active_accounts)
+        except Exception as inner_e:
+            print(f"Status update fail: {str(inner_e)}")
 
 print("🎉 Run Completed Successfully! Batch Done.")
+            
