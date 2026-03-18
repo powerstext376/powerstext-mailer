@@ -7,6 +7,7 @@ import random
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import email.utils  # 🚨 NAYA IMPORT: Anti-spam headers ke liye
 
 # ==========================================
 # 1. SETUP
@@ -15,7 +16,7 @@ scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/au
 creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
 client = gspread.authorize(creds)
 
-# 🚨 APNI GOOGLE SHEET KA LINK YAHAN DAALEIN 🚨
+# 🚨 APNI GOOGLE SHEET KA ASLI LINK YAHAN DAALEIN 🚨
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1zucz8OEsttq8a0g9wWIKk2wtur1nOLsnjrCHkguZLsI/edit?usp=drivesdk"
 sheet = client.open_by_url(SHEET_URL)
 
@@ -146,8 +147,6 @@ for lead_item in sending_queue:
     sender_email = str(current_sender.get('Email_ID', '')).strip() 
     sender_pass = str(current_sender.get('App_Password', '')).strip()
     
-    smtp_host = 'smtp.gmail.com' if 'gmail.com' in sender_email.lower() else 'smtp.hostinger.com'
-        
     try:
         # 🚀 DATA PRIVACY: Target Email Masking
         if '@' in target_email:
@@ -167,17 +166,33 @@ for lead_item in sending_queue:
         msg['To'] = target_email
         msg['Reply-To'] = "sales@powerstext.com" 
         msg['Subject'] = template['Subject']
+        
+        # 🛡️ HOSTINGER ANTI-SPAM BYPASS HEADERS 🛡️
+        msg['Date'] = email.utils.formatdate(localtime=True)
+        domain_name = sender_email.split('@')[1] if '@' in sender_email else 'powerstext.com'
+        msg['Message-ID'] = email.utils.make_msgid(domain=domain_name)
+
         msg.attach(MIMEText(final_body, 'html'))
         
-        server = smtplib.SMTP_SSL(smtp_host, 465)
-        server.login(sender_email, sender_pass)
+        # 🛡️ SMART SMTP CONNECTION (Gmail = 465 SSL, Hostinger = 587 TLS) 🛡️
+        if 'gmail.com' in sender_email.lower():
+            smtp_host = 'smtp.gmail.com'
+            server = smtplib.SMTP_SSL(smtp_host, 465)
+            server.login(sender_email, sender_pass)
+        else:
+            smtp_host = 'smtp.hostinger.com'
+            server = smtplib.SMTP(smtp_host, 587)
+            server.ehlo()
+            server.starttls() # Hostinger requires this for bulk sending
+            server.ehlo()
+            server.login(sender_email, sender_pass)
+            
         server.send_message(msg)
         server.quit()
         
         print(f"✅ Sent '{template_key}' to {masked_target} via {sender_email}")
         
         if template_key == 'Intro':
-            # Follow-up set to 1 day (24 hours)
             next_follow_up = (today_date + timedelta(days=1)).strftime('%Y-%m-%d')
             ws_leads.update_cell(lead['sheet_row'], 2, 'In-Progress') 
             ws_leads.update_cell(lead['sheet_row'], 3, next_follow_up) 
@@ -191,28 +206,27 @@ for lead_item in sending_queue:
             
         sender_index = (sender_index + 1) % len(active_accounts)
         
-        delay = random.randint(2, 4)
+        # ⏳ DELAY INCREASED to avoid Hostinger Rate Limit (5 to 8 seconds)
+        delay = random.randint(5, 8)
         print(f"⏳ Sleeping for {delay} seconds...")
         time.sleep(delay)
         
     except Exception as e:
         error_msg = str(e)
-        print(f"❌ FAIL -> Target: {masked_target} | Sender: {sender_email} | Server: {smtp_host}")
+        # Server variable fix inside exception block
+        host_display = 'smtp.gmail.com' if 'gmail.com' in sender_email.lower() else 'smtp.hostinger.com'
+        print(f"❌ FAIL -> Target: {masked_target} | Sender: {sender_email} | Server: {host_display}")
         print(f"Error Details: {error_msg}")
         
         # 🚨 UNIVERSAL AUTO-SKIP LOGIC: Koi bhi error ho, bypass kar do!
         print(f"⚠️ Account {sender_email} fail ho gaya. Marking as 'Inactive' in sheet...")
         try:
-            # 1. Sheet me Inactive likh do
             ws_accounts.update_cell(current_sender['sheet_row'], status_col_index, 'Inactive')
-            # 2. Engine ki memory se is account ko hata do
             if current_sender in active_accounts:
                 active_accounts.remove(current_sender)
-            # 3. Sender index theek kar lo
             if len(active_accounts) > 0:
                 sender_index = sender_index % len(active_accounts)
         except Exception as inner_e:
             print(f"Status update fail: {str(inner_e)}")
 
 print("🎉 Run Completed Successfully! Batch Done.")
-            
