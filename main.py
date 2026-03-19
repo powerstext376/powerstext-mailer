@@ -101,7 +101,7 @@ for i, lead in enumerate(leads_data, start=2):
         except Exception:
             pass
 
-MAX_MAILS_PER_RUN = 400
+MAX_MAILS_PER_RUN = 150
 sending_queue = (priority_queue + normal_queue)[:MAX_MAILS_PER_RUN]
 
 if not sending_queue:
