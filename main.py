@@ -7,7 +7,7 @@ import random
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import email.utils  # 🚨 NAYA IMPORT: Anti-spam headers ke liye
+import email.utils
 
 # ==========================================
 # 1. SETUP
@@ -86,21 +86,29 @@ for i, lead in enumerate(leads_data, start=2):
     if status.lower() == 'pending':
         normal_queue.append((lead, 'Intro'))
     elif status.lower() == 'in-progress' and follow_up_str:
-        try:
-            follow_up_date = datetime.strptime(follow_up_str, '%Y-%m-%d').date()
-            if today_date >= follow_up_date:
-                clicked_val = str(lead.get('Clicked', '')).strip()
-                opened_val = str(lead.get('Opened', '')).strip()
+        # 🚀 NEW: Universal Date Parser (Google Sheet ke nakhre khatam)
+        follow_up_date = None
+        date_formats = ['%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d']
+        
+        for fmt in date_formats:
+            try:
+                follow_up_date = datetime.strptime(follow_up_str, fmt).date()
+                break
+            except ValueError:
+                continue
                 
-                if clicked_val != '' and clicked_val.lower() != 'no':
-                    priority_queue.append((lead, 'Path_Clicked'))
-                elif opened_val != '' and opened_val.lower() != 'no':
-                    priority_queue.append((lead, 'Path_Opened'))
-                else:
-                    priority_queue.append((lead, 'Path_Unread'))
-        except Exception:
-            pass
+        if follow_up_date and today_date >= follow_up_date:
+            clicked_val = str(lead.get('Clicked', '')).strip()
+            opened_val = str(lead.get('Opened', '')).strip()
+            
+            if clicked_val != '' and clicked_val.lower() != 'no':
+                priority_queue.append((lead, 'Path_Clicked'))
+            elif opened_val != '' and opened_val.lower() != 'no':
+                priority_queue.append((lead, 'Path_Opened'))
+            else:
+                priority_queue.append((lead, 'Path_Unread'))
 
+# 🚀 BATCH SIZE REDUCED TO 150 TO PREVENT 30-MIN LOCK OVERLAPS
 MAX_MAILS_PER_RUN = 150
 sending_queue = (priority_queue + normal_queue)[:MAX_MAILS_PER_RUN]
 
@@ -117,9 +125,8 @@ sender_index = 0
 TRACKING_BASE_URL = "https://powerstext.com/track.php"
 
 for lead_item in sending_queue:
-    # 🚨 Check if all accounts got deactivated during this run
     if not active_accounts:
-        print("🛑 WARNING: Saare active accounts fail ho chuke hain. System pausing until new accounts are added or fixed.")
+        print("🛑 WARNING: Saare active accounts is run ke liye fail ho chuke hain. Pausing until next batch.")
         break
 
     lead, template_key = lead_item
@@ -127,7 +134,9 @@ for lead_item in sending_queue:
     if not target_email: continue
         
     template = templates.get(template_key)
-    if not template: continue
+    if not template: 
+        print(f"⚠️ Template '{template_key}' nahi mila Sheet me. Skipping {target_email}...")
+        continue
         
     current_sender = None
     attempts = 0
@@ -148,14 +157,14 @@ for lead_item in sending_queue:
     sender_pass = str(current_sender.get('App_Password', '')).strip()
     
     try:
-        # 🚀 DATA PRIVACY: Target Email Masking
+        # DATA PRIVACY
         if '@' in target_email:
             name_part, domain_part = target_email.split('@')
             masked_target = name_part[:2] + "****@" + domain_part
         else:
             masked_target = "Hidden_Email"
 
-        # 🚀 TRACKING MAGIC
+        # TRACKING MAGIC
         custom_body = template['Body'].replace("{{EMAIL}}", target_email)
         cache_buster = random.randint(1000000, 9999999)
         open_pixel = f'<img src="{TRACKING_BASE_URL}?email={target_email}&action=open&rnd={cache_buster}" width="1" height="1" style="display:none;" />'
@@ -167,14 +176,14 @@ for lead_item in sending_queue:
         msg['Reply-To'] = "sales@powerstext.com" 
         msg['Subject'] = template['Subject']
         
-        # 🛡️ HOSTINGER ANTI-SPAM BYPASS HEADERS 🛡️
+        # HOSTINGER ANTI-SPAM HEADERS
         msg['Date'] = email.utils.formatdate(localtime=True)
         domain_name = sender_email.split('@')[1] if '@' in sender_email else 'powerstext.com'
         msg['Message-ID'] = email.utils.make_msgid(domain=domain_name)
 
         msg.attach(MIMEText(final_body, 'html'))
         
-        # 🛡️ SMART SMTP CONNECTION (Gmail = 465 SSL, Hostinger = 587 TLS) 🛡️
+        # SMART SMTP CONNECTION
         if 'gmail.com' in sender_email.lower():
             smtp_host = 'smtp.gmail.com'
             server = smtplib.SMTP_SSL(smtp_host, 465)
@@ -183,7 +192,7 @@ for lead_item in sending_queue:
             smtp_host = 'smtp.hostinger.com'
             server = smtplib.SMTP(smtp_host, 587)
             server.ehlo()
-            server.starttls() # Hostinger requires this for bulk sending
+            server.starttls()
             server.ehlo()
             server.login(sender_email, sender_pass)
             
@@ -206,27 +215,32 @@ for lead_item in sending_queue:
             
         sender_index = (sender_index + 1) % len(active_accounts)
         
-        # ⏳ DELAY INCREASED to avoid Hostinger Rate Limit (5 to 8 seconds)
         delay = random.randint(5, 8)
         print(f"⏳ Sleeping for {delay} seconds...")
         time.sleep(delay)
         
     except Exception as e:
         error_msg = str(e)
-        # Server variable fix inside exception block
         host_display = 'smtp.gmail.com' if 'gmail.com' in sender_email.lower() else 'smtp.hostinger.com'
         print(f"❌ FAIL -> Target: {masked_target} | Sender: {sender_email} | Server: {host_display}")
         print(f"Error Details: {error_msg}")
         
-        # 🚨 UNIVERSAL AUTO-SKIP LOGIC: Koi bhi error ho, bypass kar do!
-        print(f"⚠️ Account {sender_email} fail ho gaya. Marking as 'Inactive' in sheet...")
+        # 🚨 SMART ACCOUNT SAVER (Temporary errors me account bachayega)
+        if "535" in error_msg or "534" in error_msg or "auth" in error_msg.lower():
+            print(f"⚠️ Account {sender_email} Auth Failed. Marking as 'Inactive' in sheet...")
+            try:
+                ws_accounts.update_cell(current_sender['sheet_row'], status_col_index, 'Inactive')
+            except Exception:
+                pass
+        else:
+            print(f"⚠️ Temporary limit for {sender_email}. Skipping for this run only. (Remains 'Active' in sheet)")
+            
         try:
-            ws_accounts.update_cell(current_sender['sheet_row'], status_col_index, 'Inactive')
             if current_sender in active_accounts:
                 active_accounts.remove(current_sender)
             if len(active_accounts) > 0:
                 sender_index = sender_index % len(active_accounts)
-        except Exception as inner_e:
-            print(f"Status update fail: {str(inner_e)}")
+        except Exception:
+            pass
 
 print("🎉 Run Completed Successfully! Batch Done.")
