@@ -80,16 +80,12 @@ normal_queue = []
 
 for i, lead in enumerate(leads_data, start=2):
     status = str(lead.get('Email_Status', '')).strip()
-    
-    # 🚀 FIX: Ab yeh Follow_Up aur Follow_Up_Level dono ko padh lega
     follow_up_str = str(lead.get('Follow_Up_Level', lead.get('Follow_Up', ''))).strip()
-    
     lead['sheet_row'] = i
     
     if status.lower() == 'pending':
         normal_queue.append((lead, 'Intro'))
     elif status.lower() == 'in-progress' and follow_up_str:
-        # Universal Date Parser
         follow_up_date = None
         date_formats = ['%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d']
         
@@ -203,13 +199,15 @@ for lead_item in sending_queue:
         
         print(f"✅ Sent '{template_key}' to {masked_target} via {sender_email}")
         
+        # 🚨 THE FIX: Saving date for BOTH Intro and Follow-up
         if template_key == 'Intro':
             next_follow_up = (today_date + timedelta(days=1)).strftime('%Y-%m-%d')
-            ws_leads.update_cell(lead['sheet_row'], 3, next_follow_up) # Column C: Follow_Up_Level
-            ws_leads.update_cell(lead['sheet_row'], 2, 'In-Progress')  # Column B: Email_Status
-            ws_leads.update_cell(lead['sheet_row'], 4, today_date.strftime('%Y-%m-%d')) # Column D: Last_Action_Date
+            ws_leads.update_cell(lead['sheet_row'], 3, next_follow_up) 
+            ws_leads.update_cell(lead['sheet_row'], 2, 'In-Progress')  
+            ws_leads.update_cell(lead['sheet_row'], 4, today_date.strftime('%Y-%m-%d')) 
         else:
             ws_leads.update_cell(lead['sheet_row'], 2, 'Completed')
+            ws_leads.update_cell(lead['sheet_row'], 4, today_date.strftime('%Y-%m-%d'))
             
         new_count = get_sent_count(current_sender) + 1
         current_sender['Daily_Sent_Count'] = new_count
@@ -245,3 +243,4 @@ for lead_item in sending_queue:
             pass
 
 print("🎉 Run Completed Successfully! Batch Done.")
+        
