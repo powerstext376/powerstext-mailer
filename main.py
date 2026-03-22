@@ -80,13 +80,16 @@ normal_queue = []
 
 for i, lead in enumerate(leads_data, start=2):
     status = str(lead.get('Email_Status', '')).strip()
-    follow_up_str = str(lead.get('Follow_Up', '')).strip()
+    
+    # 🚀 FIX: Ab yeh Follow_Up aur Follow_Up_Level dono ko padh lega
+    follow_up_str = str(lead.get('Follow_Up_Level', lead.get('Follow_Up', ''))).strip()
+    
     lead['sheet_row'] = i
     
     if status.lower() == 'pending':
         normal_queue.append((lead, 'Intro'))
     elif status.lower() == 'in-progress' and follow_up_str:
-        # 🚀 NEW: Universal Date Parser (Google Sheet ke nakhre khatam)
+        # Universal Date Parser
         follow_up_date = None
         date_formats = ['%Y-%m-%d', '%d-%m-%Y', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d']
         
@@ -108,7 +111,6 @@ for i, lead in enumerate(leads_data, start=2):
             else:
                 priority_queue.append((lead, 'Path_Unread'))
 
-# 🚀 BATCH SIZE REDUCED TO 150 TO PREVENT 30-MIN LOCK OVERLAPS
 MAX_MAILS_PER_RUN = 150
 sending_queue = (priority_queue + normal_queue)[:MAX_MAILS_PER_RUN]
 
@@ -203,9 +205,9 @@ for lead_item in sending_queue:
         
         if template_key == 'Intro':
             next_follow_up = (today_date + timedelta(days=1)).strftime('%Y-%m-%d')
-            ws_leads.update_cell(lead['sheet_row'], 2, 'In-Progress') 
-            ws_leads.update_cell(lead['sheet_row'], 3, next_follow_up) 
-            ws_leads.update_cell(lead['sheet_row'], 4, today_date.strftime('%Y-%m-%d'))
+            ws_leads.update_cell(lead['sheet_row'], 3, next_follow_up) # Column C: Follow_Up_Level
+            ws_leads.update_cell(lead['sheet_row'], 2, 'In-Progress')  # Column B: Email_Status
+            ws_leads.update_cell(lead['sheet_row'], 4, today_date.strftime('%Y-%m-%d')) # Column D: Last_Action_Date
         else:
             ws_leads.update_cell(lead['sheet_row'], 2, 'Completed')
             
@@ -225,7 +227,6 @@ for lead_item in sending_queue:
         print(f"❌ FAIL -> Target: {masked_target} | Sender: {sender_email} | Server: {host_display}")
         print(f"Error Details: {error_msg}")
         
-        # 🚨 SMART ACCOUNT SAVER (Temporary errors me account bachayega)
         if "535" in error_msg or "534" in error_msg or "auth" in error_msg.lower():
             print(f"⚠️ Account {sender_email} Auth Failed. Marking as 'Inactive' in sheet...")
             try:
@@ -233,7 +234,7 @@ for lead_item in sending_queue:
             except Exception:
                 pass
         else:
-            print(f"⚠️ Temporary limit for {sender_email}. Skipping for this run only. (Remains 'Active' in sheet)")
+            print(f"⚠️ Temporary limit for {sender_email}. Skipping for this run only.")
             
         try:
             if current_sender in active_accounts:
